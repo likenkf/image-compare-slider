@@ -16,3 +16,4 @@ A light weight image comparison tool that runs in your browser. Use the slider t
 - Slider to compare 2 images
 - Zoom in & out
 - X and Y axis offset
+- Scale adjustment per image
