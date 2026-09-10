@@ -1,4 +1,4 @@
-# image-compare-lite
+# image-compare-slider
 Compare images locally in a browser using a slider.
 
 ## Demo
