@@ -8,7 +8,7 @@ A light weight image comparison tool that runs in your browser. Use the slider t
 ## Screenshots
 
 <p align="center">
-  <img src="assets/example.png" alt="Image Compare Slider interface" width="600">
+  <img src="assets/example.png" alt="Image Compare Slider interface" width="700">
 </p>
 
 ## Features
