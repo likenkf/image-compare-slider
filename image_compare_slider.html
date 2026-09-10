@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline Before/After Image Comparison (Use Chrome browser)</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --panel-2: #1f2430;
+      --text: #eef2f7;
+      --muted: #a7b0bf;
+      --border: #31394a;
+      --accent: #7aa2ff;
+      --danger: #ff7a7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #0d1016, #121722 45%, #0f1115);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.15; }
+    .sub { color: var(--muted); margin-bottom: 20px; }
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+      background: rgba(23, 26, 33, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      backdrop-filter: blur(8px);
+      margin-bottom: 18px;
+    }
+    .dropzone {
+      grid-column: span 4;
+      min-height: 118px;
+      border: 2px dashed #49526a;
+      border-radius: 16px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      transition: 160ms ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .dropzone.dragover { border-color: var(--accent); background: rgba(122, 162, 255, 0.08); transform: translateY(-1px); }
+    .dropzone h2 { margin: 0 0 8px; font-size: 16px; position: relative; z-index: 1; }
+    .dropzone .hidden-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 1; }
+    .dropzone-header {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .dropzone p { margin: 0 0 8px; color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .filename { margin-top: 10px; font-size: 12px; color: #d8def0; word-break: break-all; position: relative; z-index: 2; }
+        .controls {
+      grid-column: span 4;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      justify-content: center;
+    }
+    .row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .stack { display: flex; flex-direction: column; gap: 8px; }
+    .range-row { display: grid; grid-template-columns: 120px 1fr 50px; gap: 10px; align-items: center; }
+    .range-row label, .small-label { color: var(--muted); font-size: 12px; }
+    input[type="range"] { width: 100%; }
+    button, select {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: 140ms ease;
+    }
+    button:hover, select:hover { border-color: #5a6682; transform: translateY(-1px); }
+    .button-active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .button-active:hover {
+      border-color: var(--accent);
+    }
+    .icon-btn { display: inline-flex; align-items: center; gap: 8px; }
+    .icon { font-size: 16px; line-height: 1; }
+    .danger:hover { border-color: var(--danger); }
+    .small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .compare-card {
+      background: rgba(23, 26, 33, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 16px;
+      overflow: hidden;
+      box-shadow: 0 18px 60px rgba(0,0,0,0.28);
+    }
+    .stage-wrap {
+      position: relative;
+      cursor: ew-resize;
+      width: 100%;
+      height: min(72vh, 760px);
+      min-height: 360px;
+      border-radius: 18px;
+      background:
+        linear-gradient(45deg, #1a2030 25%, transparent 25%),
+        linear-gradient(-45deg, #1a2030 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #1a2030 75%),
+        linear-gradient(-45deg, transparent 75%, #1a2030 75%);
+      background-size: 24px 24px;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+      overflow: hidden;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .stage-wrap.panning {
+      cursor: grab;
+    }
+
+    .stage-wrap.panning-active {
+      cursor: grabbing;
+    }
+    .hint-center {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: #c6cde0;
+      text-align: center;
+      padding: 20px;
+      pointer-events: none;
+    }
+    .img-layer, .overlay-clip { position: absolute; inset: 0; overflow: hidden; }
+    .canvas-img {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
+      transform-origin: center center;
+    }
+    .divider {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: rgba(255,255,255,0.95);
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.1), 0 0 25px rgba(255,255,255,0.35);
+      transform: translateX(-1px);
+      pointer-events: none;
+    }
+    .handle {
+      position: absolute;
+      top: 50%;
+      width: 52px;
+      height: 52px;
+      border-radius: 999px;
+      border: 2px solid rgba(255,255,255,0.92);
+      background: rgba(15, 17, 21, 0.78);
+      transform: translate(-50%, -50%);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.38);
+      pointer-events: none;
+    }
+    .handle::before { content: '↔'; font-size: 22px; line-height: 1; }
+    .label {
+      position: absolute;
+      top: 14px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(10, 12, 17, 0.68);
+      border: 1px solid rgba(255,255,255,0.14);
+      font-size: 13px;
+      backdrop-filter: blur(6px);
+      max-width: calc(50% - 24px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .label.left { left: 14px; }
+    .label.right { right: 14px; }
+    .footer-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 980px) {
+      .dropzone, .controls { grid-column: 1 / -1; }
+      .stage-wrap { height: 58vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Offline Before/After Image Comparison (Use Chrome browser)</h1>
+
+    <div class="toolbar">
+      <div class="dropzone" id="drop-original">
+        <input class="hidden-input" type="file" id="input-original" accept="image/*" aria-label="Open original image file" />
+        <h2>Image 1</h2>
+        <p>Click anywhere in this box to open a file, or drag &amp; drop an image here.</p>
+        <div class="filename" id="name-original">No file selected</div>
+      </div>
+
+      <div class="dropzone" id="drop-modified">
+        <input class="hidden-input" type="file" id="input-modified" accept="image/*" aria-label="Open image 2 file" />
+        <div class="dropzone-header">
+          <h2>Image 2</h2>
+          <button id="refresh-btn" class="refresh-inside" type="button" title="Refresh image" aria-label="Refresh image">↻</button>
+        </div>
+        <p>Click anywhere in this box to open a file, or drag &amp; drop an image here.</p>
+        <div class="filename" id="name-modified">No file selected</div>
+      </div>
+
+      <div class="controls">
+        <div class="row">
+          <button id="swap-btn" type="button">Swap sides</button>
+          <button id="center-image-btn" type="button">Center image</button>
+          <button id="center-btn" type="button">Center slider</button>
+          <button id="transparent-btn" type="button">Transparent</button>
+          <button id="clear-btn" class="danger" type="button">Clear</button>
+        </div>
+<div class="stack">
+          <div class="range-row">
+            <label for="offset-x">Horizontal nudge</label>
+            <input id="offset-x" type="range" min="-400" max="400" step="1" value="0" />
+            <span id="offset-x-value" class="small-label">0</span>
+          </div>
+          <div class="range-row">
+            <label for="offset-y">Vertical nudge</label>
+            <input id="offset-y" type="range" min="-200" max="200" step="1" value="0" />
+            <span id="offset-y-value" class="small-label">0</span>
+          </div>
+          <div class="range-row">
+            <label for="overlay-scale">Overlay scale</label>
+            <input id="overlay-scale" type="range" min="100" max="300" step="1" value="100" />
+            <span id="overlay-scale-value" class="small-label">100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-card">
+      <div class="stage-wrap" id="stage" tabindex="0" aria-label="Before after image comparison slider">
+        <div class="hint-center" id="hint">Load first image and second image to start comparing.</div>
+        <div class="img-layer" id="base-layer" hidden>
+          <img class="canvas-img" id="base-img" alt="Base image" />
+        </div>
+        <div class="overlay-clip" id="overlay-clip" hidden>
+          <img class="canvas-img" id="overlay-img" alt="Overlay image" />
+        </div>
+        <div class="divider" id="divider" hidden></div>
+        <div class="handle" id="handle" hidden></div>
+        <div class="label left" id="label-left" hidden>Image 1</div>
+        <div class="label right" id="label-right" hidden>Image 2</div>
+      </div>
+
+      <div class="footer-note">
+        <span>No uploads. No external libraries. Safe for offline review on your machine.</span>
+        <span id="status">Waiting for 2 images</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      original: null,
+      modified: null,
+      originalSize: null,
+      modifiedSize: null,
+      originalHandle: null,
+      modifiedHandle: null,
+      position: 50,
+      dragging: false,
+      swapped: false,
+      offsetX: 0,
+      offsetY: 0,
+      overlayScale: 1,
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      interactionMode: null,
+      panStartX: 0,
+      panStartY: 0,
+      panOriginX: 0,
+      panOriginY: 0,
+      transparent: false
+    };
+
+    const els = {
+      stage: document.getElementById('stage'),
+      hint: document.getElementById('hint'),
+      baseLayer: document.getElementById('base-layer'),
+      baseImg: document.getElementById('base-img'),
+      overlayClip: document.getElementById('overlay-clip'),
+      overlayImg: document.getElementById('overlay-img'),
+      divider: document.getElementById('divider'),
+      handle: document.getElementById('handle'),
+      labelLeft: document.getElementById('label-left'),
+      labelRight: document.getElementById('label-right'),
+      status: document.getElementById('status'),
+      inputOriginal: document.getElementById('input-original'),
+      inputModified: document.getElementById('input-modified'),
+      refreshBtn: document.getElementById('refresh-btn'),
+      nameOriginal: document.getElementById('name-original'),
+      nameModified: document.getElementById('name-modified'),
+      dropOriginal: document.getElementById('drop-original'),
+      dropModified: document.getElementById('drop-modified'),
+      swapBtn: document.getElementById('swap-btn'),
+      centerImageBtn: document.getElementById('center-image-btn'),
+      centerBtn: document.getElementById('center-btn'),
+      transparentBtn: document.getElementById('transparent-btn'),
+      clearBtn: document.getElementById('clear-btn'),
+      offsetX: document.getElementById('offset-x'),
+      offsetY: document.getElementById('offset-y'),
+      overlayScale: document.getElementById('overlay-scale'),
+      offsetXValue: document.getElementById('offset-x-value'),
+      offsetYValue: document.getElementById('offset-y-value'),
+      overlayScaleValue: document.getElementById('overlay-scale-value')
+    };
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function fileToDataURL(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function getImageSize(src) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = reject;
+        img.src = src;
+      });
+    }
+
+    async function loadFile(kind, file, options = {}) {
+      if (!file || !file.type.startsWith('image/')) return;
+      const dataUrl = await fileToDataURL(file);
+      const size = await getImageSize(dataUrl);
+
+      if (kind === 'original') {
+        state.original = dataUrl;
+        state.originalSize = size;
+        state.originalHandle = options.handle !== undefined ? options.handle : state.originalHandle;
+        els.nameOriginal.textContent = file.name;
+      } else {
+        state.modified = dataUrl;
+        state.modifiedSize = size;
+        state.modifiedHandle = options.handle !== undefined ? options.handle : state.modifiedHandle;
+        els.nameModified.textContent = file.name;
+      }
+      render();
+    }
+
+    async function openFile(kind) {
+      if (window.showOpenFilePicker) {
+        try {
+          const [handle] = await window.showOpenFilePicker({
+            multiple: false,
+            types: [{
+              description: 'Images',
+              accept: { 'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'] }
+            }]
+          });
+          const file = await handle.getFile();
+          await loadFile(kind, file, { handle });
+          return;
+        } catch (err) {
+          if (err && err.name === 'AbortError') return;
+        }
+      }
+
+      const input = kind === 'original' ? els.inputOriginal : els.inputModified;
+      input.click();
+    }
+
+    async function refreshFromHandle(kind) {
+      const handle = kind === 'original' ? state.originalHandle : state.modifiedHandle;
+      if (!handle) return false;
+      const file = await handle.getFile();
+      await loadFile(kind, file, { handle });
+      return true;
+    }
+
+    async function refreshFiles() {
+      let refreshedAny = false;
+      els.status.textContent = 'Refreshing...';
+      try {
+        if (state.originalHandle) refreshedAny = (await refreshFromHandle('original')) || refreshedAny;
+        if (state.modifiedHandle) refreshedAny = (await refreshFromHandle('modified')) || refreshedAny;
+
+        if (!refreshedAny) {
+          els.status.textContent = 'Refresh works with Pick file';
+          setTimeout(render, 900);
+          return;
+        }
+        els.status.textContent = 'Refreshed';
+        setTimeout(render, 500);
+      } catch (err) {
+        console.error(err);
+        els.status.textContent = 'Refresh failed';
+        setTimeout(render, 900);
+      }
+    }
+
+    function getDisplayMetrics(size, overlay = false) {
+      const stageRect = els.stage.getBoundingClientRect();
+      const stageH = stageRect.height;
+      let displayH = stageH;
+      let displayW = size.width * (stageH / size.height);
+
+      displayW *= state.zoom;
+      displayH *= state.zoom;
+
+      if (overlay) {
+        displayW *= state.overlayScale;
+        displayH *= state.overlayScale;
+      }
+      return { displayW, displayH };
+    }
+
+    function positionImage(imgEl, size, { x = 0, y = 0, overlay = false } = {}) {
+      const { displayW, displayH } = getDisplayMetrics(size, overlay);
+      imgEl.style.width = displayW + 'px';
+      imgEl.style.height = displayH + 'px';
+      imgEl.style.left = `calc(50% + ${state.panX + x}px)`;
+      imgEl.style.top = `calc(50% + ${state.panY + y}px)`;
+      imgEl.style.transform = 'translate(-50%, -50%)';
+    }
+
+    function updateSlider() {
+      const p = clamp(state.position, 0, 100);
+      state.position = p;
+      els.overlayClip.style.clipPath = `inset(0 0 0 ${p}%)`;
+      els.divider.style.left = p + '%';
+      els.handle.style.left = p + '%';
+    }
+
+    function layoutImages() {
+      const ready = !!(state.original && state.modified && state.originalSize && state.modifiedSize);
+      if (!ready) return;
+
+      const leftSrc = state.swapped ? state.modified : state.original;
+      const rightSrc = state.swapped ? state.original : state.modified;
+      const leftSize = state.swapped ? state.modifiedSize : state.originalSize;
+      const rightSize = state.swapped ? state.originalSize : state.modifiedSize;
+      const leftLabel = state.swapped ? 'Image 2' : 'Image 1';
+      const rightLabel = state.swapped ? 'Image 1' : 'Image 2';
+
+      els.baseImg.src = leftSrc;
+      els.overlayImg.src = rightSrc;
+      els.labelLeft.textContent = leftLabel;
+      els.labelRight.textContent = rightLabel;
+      els.baseImg.style.opacity = state.transparent ? '0.5' : '1';
+      els.overlayImg.style.opacity = state.transparent ? '0.5' : '1';
+      els.transparentBtn.classList.toggle('button-active', state.transparent);
+
+      positionImage(els.baseImg, leftSize, { x: 0, y: 0, overlay: false });
+      positionImage(els.overlayImg, rightSize, { x: state.offsetX * state.zoom, y: state.offsetY * state.zoom, overlay: true });
+
+      els.offsetXValue.textContent = String(state.offsetX);
+      els.offsetYValue.textContent = String(state.offsetY);
+      els.overlayScaleValue.textContent = `${Math.round(state.overlayScale * 1000) / 10}%`;
+      updateSlider();
+    }
+
+    function render() {
+      const ready = !!(state.original && state.modified && state.originalSize && state.modifiedSize);
+      els.hint.hidden = ready;
+      els.baseLayer.hidden = !ready;
+      els.overlayClip.hidden = !ready;
+      els.divider.hidden = !ready;
+      els.handle.hidden = !ready;
+      els.labelLeft.hidden = !ready;
+      els.labelRight.hidden = !ready;
+
+      if (!ready) {
+        els.transparentBtn.classList.toggle('button-active', state.transparent);
+        const count = (state.original ? 1 : 0) + (state.modified ? 1 : 0);
+        els.status.textContent = count === 0 ? 'Waiting for 2 images' : `Waiting for ${2 - count} image${2 - count === 1 ? '' : 's'}`;
+        return;
+      }
+      els.status.textContent = 'Ready';
+      layoutImages();
+    }
+
+    function setPositionFromClientX(clientX) {
+      const rect = els.stage.getBoundingClientRect();
+      const x = clamp(clientX - rect.left, 0, rect.width);
+      state.position = (x / rect.width) * 100;
+      updateSlider();
+    }
+
+    function getDividerClientX() {
+      const rect = els.stage.getBoundingClientRect();
+      return rect.left + (rect.width * state.position / 100);
+    }
+
+    function shouldStartPan(clientX) {
+      if (state.zoom <= 1.001) return false;
+      const threshold = 56;
+      return Math.abs(clientX - getDividerClientX()) > threshold;
+    }
+
+    function bindDropzone(zone, input, kind) {
+      ['dragenter', 'dragover'].forEach(type => {
+        zone.addEventListener(type, (e) => {
+          e.preventDefault();
+          zone.classList.add('dragover');
+        });
+      });
+      ['dragleave', 'drop'].forEach(type => {
+        zone.addEventListener(type, (e) => {
+          e.preventDefault();
+          zone.classList.remove('dragover');
+        });
+      });
+      zone.addEventListener('drop', async (e) => {
+        const file = e.dataTransfer.files?.[0];
+        if (file) await loadFile(kind, file, { handle: null });
+      });
+      input.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (file) await loadFile(kind, file, { handle: null });
+      });
+    }
+
+    bindDropzone(els.dropOriginal, els.inputOriginal, 'original');
+    bindDropzone(els.dropModified, els.inputModified, 'modified');
+
+    els.dropOriginal.addEventListener('click', (e) => {
+      if (e.target === els.inputOriginal) return;
+      e.preventDefault();
+      openFile('original');
+    });
+
+    els.dropModified.addEventListener('click', (e) => {
+      if (e.target === els.inputModified) return;
+      e.preventDefault();
+      openFile('modified');
+    });
+
+    document.getElementById('refresh-btn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (state.originalFile) await setImage('original', state.originalFile);
+      if (state.modifiedFile) await setImage('modified', state.modifiedFile);
+    });
+
+    els.stage.addEventListener('pointerdown', (e) => {
+      if (!(state.original && state.modified)) return;
+      state.dragging = true;
+      state.interactionMode = shouldStartPan(e.clientX) ? 'pan' : 'slider';
+      els.stage.setPointerCapture(e.pointerId);
+
+      if (state.interactionMode === 'pan') {
+        state.panStartX = e.clientX;
+        state.panStartY = e.clientY;
+        state.panOriginX = state.panX;
+        state.panOriginY = state.panY;
+        els.stage.classList.add('panning-active');
+      } else {
+        setPositionFromClientX(e.clientX);
+      }
+    });
+
+    els.stage.addEventListener('pointermove', (e) => {
+      if (!state.dragging) {
+        if (shouldStartPan(e.clientX)) {
+          els.stage.classList.add('panning');
+        } else {
+          els.stage.classList.remove('panning');
+        }
+        return;
+      }
+
+      if (state.interactionMode === 'pan') {
+        state.panX = state.panOriginX + (e.clientX - state.panStartX);
+        state.panY = state.panOriginY + (e.clientY - state.panStartY);
+        layoutImages();
+      } else {
+        setPositionFromClientX(e.clientX);
+      }
+    });
+
+    function endDrag(e) {
+      if (!state.dragging) return;
+      state.dragging = false;
+      state.interactionMode = null;
+      els.stage.classList.remove('panning-active');
+      try { els.stage.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+
+    els.stage.addEventListener('pointerup', endDrag);
+    els.stage.addEventListener('pointercancel', endDrag);
+    els.stage.addEventListener('pointerleave', () => {
+      if (!state.dragging) {
+        els.stage.classList.remove('panning');
+      }
+    });
+
+    els.stage.addEventListener('wheel', (e) => {
+      if (!(state.original && state.modified)) return;
+      e.preventDefault();
+
+      if (e.ctrlKey) {
+        const factor = e.deltaY < 0 ? 1.06 : 1 / 1.06;
+        state.zoom = clamp(state.zoom * factor, 0.25, 6);
+      } else if (state.zoom > 1.001) {
+        state.panX -= e.deltaX;
+        state.panY -= e.deltaY;
+      }
+
+      layoutImages();
+    }, { passive: false });
+
+    els.stage.addEventListener('keydown', (e) => {
+      if (!(state.original && state.modified)) return;
+
+      if (e.key === 'ArrowLeft' && !e.altKey) {
+        state.position = clamp(state.position - (e.shiftKey ? 10 : 2), 0, 100);
+        updateSlider();
+        e.preventDefault();
+      }
+      if (e.key === 'ArrowRight' && !e.altKey) {
+        state.position = clamp(state.position + (e.shiftKey ? 10 : 2), 0, 100);
+        updateSlider();
+        e.preventDefault();
+      }
+      if (e.altKey && e.key === 'ArrowLeft') {
+        state.offsetX -= e.shiftKey ? 10 : 2;
+        els.offsetX.value = String(state.offsetX);
+        layoutImages();
+        e.preventDefault();
+      }
+      if (e.altKey && e.key === 'ArrowRight') {
+        state.offsetX += e.shiftKey ? 10 : 2;
+        els.offsetX.value = String(state.offsetX);
+        layoutImages();
+        e.preventDefault();
+      }
+      if (e.altKey && e.key === 'ArrowUp') {
+        state.offsetY -= e.shiftKey ? 10 : 2;
+        els.offsetY.value = String(state.offsetY);
+        layoutImages();
+        e.preventDefault();
+      }
+      if (e.altKey && e.key === 'ArrowDown') {
+        state.offsetY += e.shiftKey ? 10 : 2;
+        els.offsetY.value = String(state.offsetY);
+        layoutImages();
+        e.preventDefault();
+      }
+      if (!e.altKey && e.key === 'ArrowUp' && state.zoom > 1.001) {
+        state.panY -= e.shiftKey ? 20 : 8;
+        layoutImages();
+        e.preventDefault();
+      }
+      if (!e.altKey && e.key === 'ArrowDown' && state.zoom > 1.001) {
+        state.panY += e.shiftKey ? 20 : 8;
+        layoutImages();
+        e.preventDefault();
+      }
+    });
+
+    els.swapBtn.addEventListener('click', () => {
+      state.swapped = !state.swapped;
+      render();
+    });
+    els.centerImageBtn.addEventListener('click', () => {
+      state.panX = 0;
+      state.panY = 0;
+      layoutImages();
+      els.stage.focus();
+    });
+    els.centerBtn.addEventListener('click', () => {
+      state.position = 50;
+      updateSlider();
+      els.stage.focus();
+    });
+    els.transparentBtn.addEventListener('click', () => {
+      state.transparent = !state.transparent;
+      if (state.original && state.modified) {
+        layoutImages();
+      } else {
+        els.transparentBtn.classList.toggle('button-active', state.transparent);
+      }
+      els.stage.focus();
+    });
+    els.clearBtn.addEventListener('click', () => {
+      state.original = null;
+      state.modified = null;
+      state.originalSize = null;
+      state.modifiedSize = null;
+      state.originalHandle = null;
+      state.modifiedHandle = null;
+      state.position = 50;
+      state.dragging = false;
+      state.swapped = false;
+      state.offsetX = 0;
+      state.offsetY = 0;
+      state.overlayScale = 1;
+      state.zoom = 1;
+      state.panX = 0;
+      state.panY = 0;
+      state.interactionMode = null;
+      state.transparent = false;
+      els.offsetX.value = '0';
+      els.offsetY.value = '0';
+      els.overlayScale.value = '100';
+      els.inputOriginal.value = '';
+      els.inputModified.value = '';
+      els.nameOriginal.textContent = 'No file selected';
+      els.nameModified.textContent = 'No file selected';
+      render();
+    });
+    els.offsetX.addEventListener('input', () => {
+      state.offsetX = Number(els.offsetX.value);
+      layoutImages();
+    });
+    els.offsetY.addEventListener('input', () => {
+      state.offsetY = Number(els.offsetY.value);
+      layoutImages();
+    });
+    els.overlayScale.addEventListener('input', () => {
+      state.overlayScale = Number(els.overlayScale.value) / 100;
+      layoutImages();
+    });
+    window.addEventListener('resize', layoutImages);
+
+    render();
+  </script>
+</body>
+</html>
