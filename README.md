@@ -1,5 +1,5 @@
 # image-compare-lite
-Compare images locally using a slider with one lightweight HTML file.
+Compare images locally in a browser using a slider.
 
 ## Demo
 
